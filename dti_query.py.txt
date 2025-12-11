@@ -1,0 +1,24 @@
+import streamlit as st
+import pandas as pd
+
+# 读取Excel数据（和文件同目录，无需改路径）
+df = pd.read_excel("企业数字化转型指数结果.xlsx", usecols=["股票代码", "企业名称", "数字化转型指数", "年份"])
+df["股票代码"] = df["股票代码"].astype(str)  # 避免数字/字符串匹配错误
+latest_year = df["年份"].max()
+
+# 前端查询界面
+st.title("企业数字化转型指数查询")
+stock_code = st.text_input("请输入股票代码（如600000）")
+
+if st.button("查询"):
+    if not stock_code:
+        st.warning("请输入股票代码！")
+    else:
+        result = df[df["股票代码"] == stock_code.strip()]
+        if len(result) == 0:
+            st.error("未找到该股票代码的数据！")
+        else:
+            st.success(f"查询成功（{latest_year}年数据）")
+            st.write("📌 股票代码：", result.iloc[0]["股票代码"])
+            st.write("🏢 企业名称：", result.iloc[0]["企业名称"])
+            st.write("📊 数字化转型指数：", round(result.iloc[0]["数字化转型指数"], 2))
