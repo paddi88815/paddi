@@ -1,100 +1,100 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go  # 更灵活的绘图库
 
-# -------------- 1. 读取并预处理数据 --------------
-df = pd.read_excel("企业数字化转型指数结果.xlsx")
-df["股票代码"] = df["股票代码"].astype(str)  # 统一字符串格式
-df = df.sort_values("年份")  # 按年份排序
-all_years = sorted(df["年份"].unique())  # 提取所有年份（用于下拉框）
-all_stocks = df["股票代码"].unique()  # 提取所有股票代码
+# -------------- 1. 读取数据 --------------
+@st.cache_data(ttl=0)  # 禁用缓存，确保读取最新Excel
+def load_data():
+    return pd.read_excel("企业数字化转型指数结果.xlsx")
+df = load_data()
+df["股票代码"] = df["股票代码"].astype(str)
+df = df.sort_values("年份")
+all_years = sorted(df["年份"].unique())
+all_stocks = df["股票代码"].unique()
 
-# -------------- 2. 前端界面布局 --------------
-st.set_page_config(page_title="数字化转型指数查询", layout="wide")  # 宽屏布局
+# -------------- 2. 前端界面 --------------
+st.set_page_config(page_title="数字化转型指数查询", layout="wide")
 st.title("企业数字化转型指数查询系统")
-st.subheader("📊 指数查询与趋势可视化", divider="blue")
+st.subheader("📊 指数趋势（带年份箭头标注）", divider="blue")
 
-# 分栏布局：左侧筛选条件，右侧结果展示
-col1, col2 = st.columns([1, 3])
-
-with col1:
-    st.sidebar.header("🔍 查询条件")
-    # 股票代码输入（支持多个）
-    stock_codes = st.sidebar.text_input(
-        "股票代码（多个用逗号分隔）",
-        placeholder="例：600000 或 600000,600016",
-        help="可输入多个代码，用英文逗号分隔"
-    )
-    
-    # 年份筛选：单选/多选/全部
-    query_type = st.sidebar.radio("查询类型", ["单年份查询", "多年份趋势查询"])
-    if query_type == "单年份查询":
-        selected_year = st.sidebar.selectbox("选择年份", all_years, index=len(all_years)-1)
-        year_filter = [selected_year]  # 单年份
-    else:
-        selected_years = st.sidebar.multiselect(
-            "选择年份（默认全部）",
-            all_years,
-            default=all_years,
-            help="可勾选多个年份，展示趋势"
-        )
-        year_filter = selected_years  # 多年份
-
-    # 查询按钮
-    query_btn = st.sidebar.button("执行查询", type="primary")
-
-# -------------- 3. 数据筛选与可视化 --------------
-with col2:
-    if query_btn:
-        # 校验输入
-        if not stock_codes:
-            st.warning("⚠️ 请输入至少一个股票代码！")
-        elif not year_filter:
-            st.warning("⚠️ 请选择至少一个年份！")
-        else:
-            # 处理股票代码
-            code_list = [code.strip() for code in stock_codes.split(",")]
-            # 筛选数据（股票代码+年份）
-            filter_df = df[
-                (df["股票代码"].isin(code_list)) & 
-                (df["年份"].isin(year_filter))
-            ]
-
-            if len(filter_df) == 0:
-                st.error("❌ 未找到匹配的股票代码/年份数据！")
-            else:
-                # 展示查询结果概览
-                st.success(f"✅ 查询结果：{len(code_list)} 家企业 · {len(year_filter)} 个年份")
-                
-                # 1. 绘制折线图（适配单/多年份）
-                st.subheader("📈 数字化转型指数趋势")
-                fig = px.line(
-                    filter_df,
-                    x="年份",
-                    y="数字化转型指数",
-                    color="企业名称",
-                    symbol="股票代码",
-                    title=f"{'单年份' if len(year_filter)==1 else '多年份'}指数对比",
-                    labels={"数字化转型指数": "转型指数", "年份": "统计年份"},
-                    hover_data={"股票代码": True, "企业名称": True, "数字化转型指数": ":.2f"},
-                    markers=True  # 单年份时显示圆点，多年份时显示折线+圆点
-                )
-                fig.update_layout(height=500, xaxis_tickmode="linear")  # 优化样式
-                st.plotly_chart(fig, use_container_width=True)
-
-                # 2. 展示详细数据表格
-                st.subheader("📋 详细数据")
-                # 按年份+企业名称排序
-                show_df = filter_df[["年份", "股票代码", "企业名称", "数字化转型指数"]].sort_values(["年份", "企业名称"])
-                # 格式化指数为2位小数
-                show_df["数字化转型指数"] = show_df["数字化转型指数"].round(2)
-                st.dataframe(show_df, use_container_width=True, hide_index=True)
-
-# -------------- 4. 侧边栏辅助信息 --------------
+# 左侧查询设置
 with st.sidebar:
-    st.divider()
-    st.info("### 📌 数据说明")
-    st.write(f"📅 数据年份范围：{min(all_years)} - {max(all_years)}")
-    st.write(f"🏢 覆盖企业数：{len(all_stocks)} 家")
-    st.write("💡 单年份查询仅展示该年份数据，多年份可查看趋势变化")
+    st.header("🔍 查询设置")
+    # 查询方式：股票代码/企业名称
+    query_mode = st.radio("查询方式", ["股票代码", "企业名称"], index=0)
+    # 输入框
+    if query_mode == "股票代码":
+        stock_code = st.text_input("股票代码", placeholder="例：000001")
+        filter_col = "股票代码"
+        filter_val = stock_code.strip()
+    else:
+        company_name = st.text_input("企业名称", placeholder="例：平安银行")
+        filter_col = "企业名称"
+        filter_val = company_name.strip()
+    # 年份选择
+    query_year = st.selectbox("查询年份", all_years, index=len(all_years)-1)
+    # 按钮
+    query_btn = st.button("执行查询", type="primary")
+    reset_btn = st.button("重置")
+
+# -------------- 3. 数据筛选与可视化（带箭头标注） --------------
+if reset_btn:
+    st.experimental_rerun()  # 重置页面
+
+if query_btn:
+    if not filter_val:
+        st.warning("⚠️ 请输入查询内容！")
+    else:
+        # 筛选数据
+        filter_df = df[df[filter_col] == filter_val]
+        if len(filter_df) == 0:
+            st.error("❌ 未找到匹配数据！")
+        else:
+            # 提取该企业的所有年份数据
+            company_df = filter_df.sort_values("年份")
+            # 提取指定年份的数据（用于箭头标注）
+            target_year_data = company_df[company_df["年份"] == query_year].iloc[0]
+
+            # -------------- 绘制带箭头的折线图 --------------
+            fig = go.Figure()
+            # 绘制折线
+            fig.add_trace(go.Scatter(
+                x=company_df["年份"],
+                y=company_df["数字化转型指数"],
+                mode="lines+markers",
+                name=target_year_data["企业名称"],
+                line=dict(width=3, color="#1f77b4"),
+                marker=dict(size=8, color="#1f77b4")
+            ))
+
+            # 为每一年添加箭头标注
+            for idx, row in company_df.iterrows():
+                fig.add_annotation(
+                    x=row["年份"],
+                    y=row["数字化转型指数"],
+                    text=f"{row['年份']}年",  # 标注内容：年份
+                    showarrow=True,
+                    arrowhead=2,  # 箭头样式
+                    arrowcolor="#ff7f0e",  # 箭头颜色
+                    ax=0,  # 箭头水平偏移
+                    ay=-20,  # 箭头垂直偏移（向上）
+                    font=dict(size=10, color="#333")
+                )
+
+            # 优化图表样式
+            fig.update_layout(
+                title=f"数字化转型指数趋势 (1999-2023) | {query_year}年",
+                xaxis_title="年份",
+                yaxis_title="数字化转型指数",
+                height=500,
+                showlegend=True,
+                legend_title="企业名称"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 展示详细数据
+            st.subheader("📋 详细数据")
+            show_df = company_df[["年份", "股票代码", "企业名称", "数字化转型指数"]]
+            show_df["数字化转型指数"] = show_df["数字化转型指数"].round(2)
+            st.dataframe(show_df, use_container_width=True, hide_index=True)
 
