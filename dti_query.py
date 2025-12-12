@@ -24,7 +24,7 @@ with st.sidebar:
     stock_codes = st.text_input(
         "股票代码（多个用逗号分隔）",
         placeholder="例：000001,000002",
-        value="000001"
+        value="600000"
     )
     # 选择需要标注的年份
     target_year = st.selectbox("选择标注年份", all_years, index=all_years.index(2004))
@@ -104,3 +104,4 @@ if query_btn:
             show_df = filter_df[["年份", "股票代码", "企业名称", "数字化转型指数"]].sort_values(["年份", "企业名称"])
             show_df["数字化转型指数"] = show_df["数字化转型指数"].round(2)
             st.dataframe(show_df, use_container_width=True, hide_index=True)
+
